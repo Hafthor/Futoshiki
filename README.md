@@ -1,0 +1,2 @@
+# Futoshiki
+Futoshiki puzzle solver
