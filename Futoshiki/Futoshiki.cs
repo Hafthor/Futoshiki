@@ -258,4 +258,15 @@ public class Futoshiki {
             }
         }
     }
+
+    public string Solution() {
+        char[] result = new char[size * size + size - 1];
+        for (int i = 0; i < result.Length; i++) result[i] = '\n';
+        for (int v = 0; v < size; v++)
+            for (int h = 0; h < size; h++) {
+                int value = GetValue(v, h);
+                result[v * (size + 1) + h] = value > 0 ? (char)(value + '0') : '?';
+            }
+        return new string(result);
+    }
 }

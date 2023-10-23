@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Futoshiki", "Futoshiki\Futoshiki.csproj", "{23E262FE-BB12-4840-B764-20E9D02870D1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FutoshikiTests", "FutoshikiTests\FutoshikiTests.csproj", "{459B3062-DB75-457D-BE73-FDE290961D4A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{23E262FE-BB12-4840-B764-20E9D02870D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{23E262FE-BB12-4840-B764-20E9D02870D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{23E262FE-BB12-4840-B764-20E9D02870D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{459B3062-DB75-457D-BE73-FDE290961D4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{459B3062-DB75-457D-BE73-FDE290961D4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{459B3062-DB75-457D-BE73-FDE290961D4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{459B3062-DB75-457D-BE73-FDE290961D4A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
