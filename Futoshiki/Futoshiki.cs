@@ -1,6 +1,6 @@
 public class Futoshiki {
     private char[,] vConstraints, hConstraints;
-    private char[,,] constraints;
+    private int[,,] constraints;
     private int size;
     private bool[,,] forbidden;
 
@@ -34,7 +34,7 @@ public class Futoshiki {
                         throw new ArgumentException("Invalid input: expected space");
             }
         }
-        constraints = new char[size, size, 4]; // 0=vc>, 1=vc<, 2=hc>, 3=hc<
+        constraints = new int[size, size, 4]; // 0=vc>, 1=vc<, 2=hc>, 3=hc<
         // convert vConstraints and hConstraints to constraints to make solving easier
         for (int v = 0; v < size; v++)
             for (int h = 0; h < size; h++) {
@@ -49,9 +49,28 @@ public class Futoshiki {
             }
     }
 
+    private Futoshiki(Futoshiki input) { // copy constructor
+        size = input.size;
+        vConstraints = new char[size - 1, size];
+        hConstraints = new char[size, size - 1];
+        forbidden = new bool[size, size, size];
+        constraints = new int[size, size, 4];
+        for (int v = 0; v < size; v++)
+            for (int h = 0; h < size; h++) {
+                if (v < size - 1)
+                    vConstraints[v, h] = input.vConstraints[v, h];
+                if (h < size - 1)
+                    hConstraints[v, h] = input.hConstraints[v, h];
+                for (int n = 0; n < size; n++)
+                    forbidden[v, h, n] = input.forbidden[v, h, n];
+                for (int k = 0; k < 4; k++)
+                    constraints[v, h, k] = input.constraints[v, h, k];
+            }
+    }
+
     private bool SetValue(int v, int h, int n) {
         if (forbidden[v, h, n - 1])
-            throw new ArgumentException("SetValue: value " + n + " at (" + v + "," + h + ") is forbidden");
+            throw new ArgumentException($"SetValue: value {n} at ({v},{h}) is forbidden");
         bool didSomething = false;
         for (int i = 1; i <= size; i++)
             if (i != n && !forbidden[v, h, i - 1])
@@ -69,15 +88,65 @@ public class Futoshiki {
         return value;
     }
 
+    private int GetMinValue(int v, int h) {
+        for (int i = 1; i <= size; i++)
+            if (!forbidden[v, h, i - 1])
+                return i;
+        return 0;
+    }
+
+    private int GetMaxValue(int v, int h) {
+        for (int i = size; i >= 1; i--)
+            if (!forbidden[v, h, i - 1])
+                return i;
+        return 0;
+    }
+
     public void Solve() {
         for (int pass = 0; pass < 100; pass++) {
             Console.WriteLine($"Pass {pass + 1}:");
             bool didSomething = false;
             for (int v = 0; v < size; v++)
                 for (int h = 0; h < size; h++)
-                    didSomething |= Solve(v, h);
-            if (!didSomething) break;
+                    if (Solve(v, h))
+                        didSomething = true;
+            if (!didSomething) {
+                if (!IsValid()) {
+                    Console.WriteLine("Invalid state");
+                    break;
+                }
+                if (IsSolved()) break;
+                // try to guess a value
+                var (v, h, n) = NextGuess();
+                if (n == 0) {
+                    Console.WriteLine("No more guesses");
+                    break;
+                }
+                Console.WriteLine($"Guessing {n} at ({v},{h})");
+                var f = new Futoshiki(this);
+                f.SetValue(v, h, n);
+                f.Solve();
+                if (f.IsSolved() && f.IsValid()) {
+                    Console.WriteLine("Guess worked");
+                    for (int i = 0; i < size; i++)
+                        for (int j = 0; j < size; j++)
+                            for (int k = 0; k < size; k++)
+                                forbidden[i, j, k] = f.forbidden[i, j, k];
+                    break;
+                }
+                Console.WriteLine("Guess failed");
+                forbidden[v, h, n - 1] = true;
+            }
         }
+    }
+
+    private (int v, int h, int n) NextGuess() {
+        for (int v = 0; v < size; v++)
+            for (int h = 0; h < size; h++) {
+                int min = GetMinValue(v, h), max = GetMaxValue(v, h);
+                if (min != max && min > 0 && max > 0) return (v, h, min);
+            }
+        return (0, 0, 0);
     }
 
     private bool Solve(int v, int h) {
@@ -90,33 +159,54 @@ public class Futoshiki {
                 if (!forbidden[v, h, c % 2 != 0 ? size - 1 - i : i])
                     didSomething = forbidden[v, h, c % 2 != 0 ? size - 1 - i : i] = true;
 
-        // can't be the same as any other value in the same row or column
-        for (int i = 0; i < size; i++) {
-            int nv = GetValue(i, h), nh = GetValue(v, i);
-            if (i != v && nv != 0 && !forbidden[i, h, nv - 1]) didSomething = forbidden[i, h, nv - 1] = true;
-            if (i != h && nh != 0 && !forbidden[v, i, nh - 1]) didSomething = forbidden[v, i, nh - 1] = true;
-        }
-
         // only one in row or column that can be this value
-        for (int n = 1; n <= size; n++) {
-            if (forbidden[v, h, n - 1]) continue;
-            var onlyInThisRow = Enumerable.Range(0, size).All(i => i == h || forbidden[v, i, n - 1]);
-            var onlyInThisCol = Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, n - 1]);
-            if (onlyInThisRow || onlyInThisCol) didSomething |= SetValue(v, h, n);
-        }
+        for (int n = 1; n <= size; n++)
+            if (!forbidden[v, h, n - 1])
+                if (Enumerable.Range(0, size).All(i => i == h || forbidden[v, i, n - 1]) ||
+                    Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, n - 1]))
+                    if (SetValue(v, h, n))
+                        didSomething = true;
 
         // do some more clever things here
         return didSomething;
     }
 
-    public bool Print() {
-        bool isSolved = true;
+    public bool IsSolved() {
+        for (int v = 0; v < size; v++)
+            for (int h = 0; h < size; h++)
+                if (GetValue(v, h) == 0)
+                    return false;
+        return true;
+    }
 
+    public bool IsValid() {
+        for (int v = 0; v < size; v++)
+            for (int h = 0; h < size; h++) {
+                if (GetMinValue(v, h) == 0) {
+                    Console.WriteLine($"Invalid state at ({v},{h}): no possible values");
+                    return false;
+                }
+                var n = GetValue(v, h);
+                if (n == 0) continue;
+                if (Enumerable.Range(0, size).Any(i => i != h && n == GetValue(v, i))) return false;
+                if (Enumerable.Range(0, size).Any(i => i != v && n == GetValue(i, h))) return false;
+                if (v > 0 && vConstraints[v - 1, h] == '^' && n <= GetMaxValue(v - 1, h)) return false;
+                if (v > 0 && vConstraints[v - 1, h] == 'v' && n >= GetMinValue(v - 1, h)) return false;
+                if (v < size - 1 && vConstraints[v, h] == '^' && n >= GetMaxValue(v + 1, h)) return false;
+                if (v < size - 1 && vConstraints[v, h] == 'v' && n <= GetMinValue(v + 1, h)) return false;
+                if (h > 0 && hConstraints[v, h - 1] == '<' && n <= GetMaxValue(v, h - 1)) return false;
+                if (h > 0 && hConstraints[v, h - 1] == '>' && n >= GetMinValue(v, h - 1)) return false;
+                if (h < size - 1 && hConstraints[v, h] == '<' && n >= GetMaxValue(v, h + 1)) return false;
+                if (h < size - 1 && hConstraints[v, h] == '>' && n <= GetMinValue(v, h + 1)) return false;
+            }
+        return true;
+    }
+
+    public bool Print() {
         for (int v = 0; v < size; v++) {
             for (int h = 0; h < size; h++) {
                 int value = GetValue(v, h);
                 Console.Write(value > 0 ? (char)(value + '0') : '?');
-                isSolved &= value > 0;
                 if (h < size - 1)
                     Console.Write(hConstraints[v, h]);
             }
@@ -130,7 +220,31 @@ public class Futoshiki {
                 Console.WriteLine();
             }
         }
+        return IsSolved();
+    }
 
-        return isSolved;
+    public void PrintDebug() {
+        for (int v = 0; v < size; v++) {
+            for (int n = 0; n < size; n++) {
+                for (int h = 0; h < size; h++) {
+                    Console.Write(forbidden[v, h, n] ? 'x' : (n + 1).ToString());
+                    if (h < size - 1)
+                        Console.Write(hConstraints[v, h]);
+                }
+                Console.Write("   ");
+            }
+            Console.WriteLine();
+            if (v < size - 1) {
+                for (int n = 0; n < size; n++) {
+                    for (int h = 0; h < size; h++) {
+                        Console.Write(vConstraints[v, h]);
+                        if (h < size - 1)
+                            Console.Write(" ");
+                    }
+                    Console.Write("   ");
+                }
+                Console.WriteLine();
+            }
+        }
     }
 }

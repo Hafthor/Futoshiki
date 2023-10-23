@@ -6,4 +6,6 @@
                       "    ^ ^\n" +
                       "?<? ? ?"); // solution: 3142 4231 2413 1324
 f.Solve();
-return f.Print() ? 0 : 1;
+bool solved = f.Print();
+if (!solved) f.PrintDebug();
+return solved ? 0 : 1;
