@@ -150,8 +150,19 @@ public class Futoshiki {
     }
 
     private bool Solve(int v, int h) {
-        if (GetValue(v, h) > 0) return false;
         bool didSomething = false;
+
+        int n = GetValue(v, h);
+        if (n > 0) {
+            // prevent others in row/col from being this value
+            for (int i = 0; i < size; i++) {
+                if (i != h && !forbidden[v, i, n - 1])
+                    didSomething = forbidden[v, i, n - 1] = true;
+                if (i != v && !forbidden[i, h, n - 1])
+                    didSomething = forbidden[i, h, n - 1] = true;
+            }
+            return didSomething;
+        }
 
         // restrict to possible values based on constraints
         for (int c = 0; c < 4; c++)
@@ -160,11 +171,11 @@ public class Futoshiki {
                     didSomething = forbidden[v, h, c % 2 != 0 ? size - 1 - i : i] = true;
 
         // only one in row or column that can be this value
-        for (int n = 1; n <= size; n++)
-            if (!forbidden[v, h, n - 1])
-                if (Enumerable.Range(0, size).All(i => i == h || forbidden[v, i, n - 1]) ||
-                    Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, n - 1]))
-                    if (SetValue(v, h, n))
+        for (int nn = 1; nn <= size; nn++)
+            if (!forbidden[v, h, nn - 1])
+                if (Enumerable.Range(0, size).All(i => i == h || forbidden[v, i, nn - 1]) ||
+                    Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, nn - 1]))
+                    if (SetValue(v, h, nn))
                         didSomething = true;
 
         // do some more clever things here
