@@ -16,9 +16,11 @@ for (;;) {
     f = new Futoshiki(4, random);
     f.Print();
     Console.WriteLine("Guesses: " + f.Guesses);
-    Console.WriteLine("Press ENTER to show solution and next puzzle (or q to quit)");
+    Console.WriteLine("Press ENTER to show solution (or q to quit)");
     if (Console.ReadLine() == "q") break;
     f.Solve();
     f.Print();
+    Console.WriteLine("Press ENTER to continue (or q to quit)");
+    if (Console.ReadLine() == "q") break;
     random = new Random();
 }
