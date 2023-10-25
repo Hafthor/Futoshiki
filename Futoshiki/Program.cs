@@ -6,6 +6,19 @@
                       "    ^ ^\n" +
                       "?<? ? ?"); // solution: 3142 4231 2413 1324
 f.Solve();
-bool solved = f.Print();
-if (!solved) f.PrintDebug();
-return solved ? 0 : 1;
+f.Print();
+Console.WriteLine("Guesses: " + f.Guesses);
+if (!f.IsSolved()) f.PrintDebug();
+
+Random random = new Random(0); // first one is always the same
+for (;;) {
+    Console.WriteLine();
+    f = new Futoshiki(4, random);
+    f.Print();
+    Console.WriteLine("Guesses: " + f.Guesses);
+    Console.WriteLine("Press ENTER to show solution and next puzzle (or q to quit)");
+    if (Console.ReadLine() == "q") break;
+    f.Solve();
+    f.Print();
+    random = new Random();
+}

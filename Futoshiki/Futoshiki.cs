@@ -1,8 +1,10 @@
 public class Futoshiki {
     private char[,] vConstraints, hConstraints;
     private int[,,] constraints;
-    private int size;
+    private int size, guesses;
     private bool[,,] forbidden;
+
+    public int Guesses => guesses;
 
     public Futoshiki(string input) {
         var ss = input.Split('\n');
@@ -34,6 +36,10 @@ public class Futoshiki {
                         throw new ArgumentException("Invalid input: expected space");
             }
         }
+        InitConstraints();
+    }
+
+    private void InitConstraints() {
         constraints = new int[size, size, 4]; // 0=vc>, 1=vc<, 2=hc>, 3=hc<
         // convert vConstraints and hConstraints to constraints to make solving easier
         for (int v = 0; v < size; v++)
@@ -47,6 +53,70 @@ public class Futoshiki {
                 if (h < size - 1 && hConstraints[v, h] != ' ')
                     constraints[v, h, hConstraints[v, h] == '<' ? 3 : 2]++;
             }
+    }
+
+    public Futoshiki(int size, Random random) {
+        this.size = size;
+        var grid = MakeLatinSquare(size, random);
+        for (;;) {
+            vConstraints = new char[size - 1, size];
+            hConstraints = new char[size, size - 1];
+            for (int i = 0; i < size; i++)
+                for (int j = 0; j < size - 1; j++)
+                    vConstraints[j, i] = hConstraints[i, j] = ' ';
+            forbidden = new bool[size, size, size];
+            InitConstraints();
+            if (Solve()) throw new ApplicationException("How did we uniquely solve this with no hints?");
+            int hints = 0;
+            List<(int, int)> numberHints = new();
+            while (hints < size * size) {
+                // add hint
+                if (random.Next(4) == 0) { // number hint
+                    int v = random.Next(size), h = random.Next(size);
+                    if (numberHints.Contains((v, h))) continue;
+                    numberHints.Add((v, h));
+                } else if (random.Next(2) == 0) { // vertical constraint
+                    int v = random.Next(size - 1), h = random.Next(size);
+                    if (vConstraints[v, h] != ' ') continue;
+                    int nh = grid[v, h], nl = grid[v + 1, h];
+                    vConstraints[v, h] = nh < nl ? '^' : 'v';
+                } else { // horizontal constraint
+                    int v = random.Next(size), h = random.Next(size - 1);
+                    if (hConstraints[v, h] != ' ') continue;
+                    int nl = grid[v, h], nr = grid[v, h + 1];
+                    hConstraints[v, h] = nl < nr ? '<' : '>';
+                }
+                forbidden = new bool[size, size, size];
+                InitConstraints();
+                foreach ((int v, int h) in numberHints)
+                    SetValue(v, h, grid[v, h]);
+                if (Solve()) break;
+                hints++;
+            }
+            if (IsSolved()) {
+                forbidden = new bool[size, size, size];
+                foreach ((int v, int h) in numberHints)
+                    SetValue(v, h, grid[v, h]);
+                break;
+            }
+            // failed to make a uniquely solvable puzzle, try again
+        }
+    }
+
+    private static int[,] MakeLatinSquare(int size, Random random) {
+        for (;;) {
+            var grid = new int[size, size];
+            for (int v = 0; v < size; v++)
+                for (int h = 0; h < size; h++) {
+                    var ns = Enumerable.Range(1, size).ToHashSet();
+                    for (int i = 0; i < v; i++) ns.Remove(grid[i, h]);
+                    for (int i = 0; i < h; i++) ns.Remove(grid[v, i]);
+                    if (ns.Count == 0) break;
+                    int n = ns.ToList()[random.Next(ns.Count)];
+                    grid[v, h] = n;
+                }
+            if (grid[size - 1, size - 1] > 0) return grid;
+        }
     }
 
     private Futoshiki(Futoshiki input) { // copy constructor
@@ -102,42 +172,63 @@ public class Futoshiki {
         return 0;
     }
 
-    public void Solve() {
+    public bool Solve() {
+        int solutions = 0;
+        if (!Solve(ref solutions, true)) {
+            forbidden = new bool[size, size, size];
+            return false;
+        }
+        forbidden = new bool[size, size, size];
+        guesses = 0;
+        if (!Solve(ref solutions, false)) {
+            forbidden = new bool[size, size, size];
+            return false;
+        }
+        return IsSolved();
+    }
+
+    private bool Solve(ref int solutions, bool uniqueTest) {
         for (int pass = 0; pass < 100; pass++) {
-            Console.WriteLine($"Pass {pass + 1}:");
             bool didSomething = false;
             for (int v = 0; v < size; v++)
                 for (int h = 0; h < size; h++)
                     if (Solve(v, h))
                         didSomething = true;
             if (!didSomething) {
-                if (!IsValid()) {
-                    Console.WriteLine("Invalid state");
-                    break;
+                if (!IsValid()) break; // Invalid state
+                if (IsSolved()) {
+                    if (!uniqueTest) break;
+                    if (solutions > 1) return false; // multiple solutions found
+                    solutions++;
                 }
-                if (IsSolved()) break;
-                // try to guess a value
+            nextGuess: // try to guess a value
                 var (v, h, n) = NextGuess();
-                if (n == 0) {
-                    Console.WriteLine("No more guesses");
-                    break;
-                }
+                guesses++;
+                if (n == 0) break; // No more guesses
                 Console.WriteLine($"Guessing {n} at ({v},{h})");
                 var f = new Futoshiki(this);
                 f.SetValue(v, h, n);
-                f.Solve();
-                if (f.IsSolved() && f.IsValid()) {
-                    Console.WriteLine("Guess worked");
+                if (!f.Solve(ref solutions, uniqueTest)) return false;
+                if (f.IsSolved() && f.IsValid()) { // guess worked
+                    var grid = new int[size, size];
                     for (int i = 0; i < size; i++)
-                        for (int j = 0; j < size; j++)
+                        for (int j = 0; j < size; j++) {
+                            grid[i, j] = GetValue(i, j);
                             for (int k = 0; k < size; k++)
                                 forbidden[i, j, k] = f.forbidden[i, j, k];
+                        }
+                    if (uniqueTest) {
+                        if (solutions > 1) return false; // multiple solutions found
+                        solutions++;
+                        forbidden[v, h, n - 1] = true;
+                        goto nextGuess;
+                    }
                     break;
                 }
-                Console.WriteLine("Guess failed");
-                forbidden[v, h, n - 1] = true;
+                forbidden[v, h, n - 1] = true; // guess failed, don't guess n again
             }
         }
+        return true;
     }
 
     private (int v, int h, int n) NextGuess() {
@@ -156,10 +247,16 @@ public class Futoshiki {
         if (n > 0) {
             // prevent others in row/col from being this value
             for (int i = 0; i < size; i++) {
-                if (i != h && !forbidden[v, i, n - 1])
+                if (i != h && !forbidden[v, i, n - 1]) {
                     didSomething = forbidden[v, i, n - 1] = true;
-                if (i != v && !forbidden[i, h, n - 1])
+                    if (GetValue(v, i) != 0)
+                        Console.WriteLine($"Discovered {GetValue(v, i)} at ({v},{i}) #1");
+                }
+                if (i != v && !forbidden[i, h, n - 1]) {
                     didSomething = forbidden[i, h, n - 1] = true;
+                    if (GetValue(i, h) != 0)
+                        Console.WriteLine($"Discovered {GetValue(i, h)} at ({i},{h}) #2");
+                }
             }
             return didSomething;
         }
@@ -167,16 +264,21 @@ public class Futoshiki {
         // restrict to possible values based on constraints
         for (int c = 0; c < 4; c++)
             for (int i = 0; i < constraints[v, h, c]; i++)
-                if (!forbidden[v, h, c % 2 != 0 ? size - 1 - i : i])
+                if (!forbidden[v, h, c % 2 != 0 ? size - 1 - i : i]) {
                     didSomething = forbidden[v, h, c % 2 != 0 ? size - 1 - i : i] = true;
+                    if (GetValue(v, h) != 0)
+                        Console.WriteLine($"Discovered {GetValue(v, h)} at ({v},{h}) #3");
+                }
 
         // only one in row or column that can be this value
         for (int nn = 1; nn <= size; nn++)
             if (!forbidden[v, h, nn - 1])
                 if (Enumerable.Range(0, size).All(i => i == h || forbidden[v, i, nn - 1]) ||
                     Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, nn - 1]))
-                    if (SetValue(v, h, nn))
+                    if (SetValue(v, h, nn)) {
                         didSomething = true;
+                        Console.WriteLine($"Discovered {nn} at ({v},{h}) #4");
+                    }
 
         // do some more clever things here
         return didSomething;
@@ -193,10 +295,7 @@ public class Futoshiki {
     public bool IsValid() {
         for (int v = 0; v < size; v++)
             for (int h = 0; h < size; h++) {
-                if (GetMinValue(v, h) == 0) {
-                    Console.WriteLine($"Invalid state at ({v},{h}): no possible values");
-                    return false;
-                }
+                if (GetMinValue(v, h) == 0) return false; // Invalid state: no possible values
                 var n = GetValue(v, h);
                 if (n == 0) continue;
                 if (Enumerable.Range(0, size).Any(i => i != h && n == GetValue(v, i))) return false;
@@ -213,7 +312,7 @@ public class Futoshiki {
         return true;
     }
 
-    public bool Print() {
+    public void Print() {
         for (int v = 0; v < size; v++) {
             for (int h = 0; h < size; h++) {
                 int value = GetValue(v, h);
@@ -231,7 +330,6 @@ public class Futoshiki {
                 Console.WriteLine();
             }
         }
-        return IsSolved();
     }
 
     public void PrintDebug() {
