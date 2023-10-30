@@ -66,7 +66,8 @@ public class Futoshiki {
                     vConstraints[j, i] = hConstraints[i, j] = ' ';
             forbidden = new bool[size, size, size];
             InitConstraints();
-            if (Solve()) throw new ApplicationException("How did we uniquely solve this with no hints?");
+            var (solved, multipleSolutions) = Solve();
+            if (solved && !multipleSolutions) throw new ApplicationException("How did we uniquely solve this with no hints?");
             int hints = 0;
             List<(int, int)> numberHints = new();
             while (hints < size * size) {
@@ -90,7 +91,8 @@ public class Futoshiki {
                 InitConstraints();
                 foreach ((int v, int h) in numberHints)
                     SetValue(v, h, grid[v, h]);
-                if (Solve()) break;
+                (solved, multipleSolutions) = Solve();
+                if (solved && !multipleSolutions) break;
                 Console.WriteLine("added hint");
                 hints++;
             }
@@ -174,64 +176,70 @@ public class Futoshiki {
         return 0;
     }
 
-    public bool Solve() {
-        List<(int, int, int)> guesses = new();
-        if (!Solve(guesses)) {
+    public (bool solved, bool multipleSolutionsFound) Solve() {
+        List<(int v, int h, int n)> guesses = new();
+        var (solved, didSomething) = Solve(guesses);
+        if (!solved) {
             forbidden = new bool[size, size, size];
-            return false;
+            return (false, false);
         }
         if (IsSolved() && IsValid()) {
             Console.WriteLine("Solved!");
             // check to see if other solutions exist
             foreach (var guess in guesses) {
                 var f = new Futoshiki(this);
-                f.forbidden[guess.Item1, guess.Item2, guess.Item3 - 1] = true;
-                if (f.Solve()) {
+                f.forbidden = new bool[size, size, size];
+                f.forbidden[guess.v, guess.h, guess.n - 1] = true;
+                List<(int v, int h, int n)> otherGuesses = new();
+                (solved, didSomething) = f.Solve(otherGuesses);
+                if (solved) {
                     Console.WriteLine("Other solution found");
-                    return false;
+                    return (true, true);
                 }
             }
+            return (true, false);
         }
-        return IsSolved();
+        return (false, false);
     }
 
-    private bool Solve(List<(int, int, int)> guesses) {
+    private (bool solved, bool didSomething) Solve(List<(int v, int h, int n)> guesses) {
         for (int pass = 0; pass < 100; pass++) {
             bool didSomething = false;
             for (int v = 0; v < size; v++)
                 for (int h = 0; h < size; h++)
                     didSomething |= Solve(v, h);
             if (!didSomething) {
-                if (!IsValid()) break; // Invalid state
-                if (IsSolved()) return didSomething;
+                if (!IsValid()) return (false, false); // Invalid state
+                if (IsSolved()) return (true, false);
                 var (v, h) = NextUnknown();
-                if (v == -1) break; // No more guesses
+                if (v == -1) return (false, false); // No more guesses
                 var couldBe = Enumerable.Range(1, size).Where(i => !forbidden[v, h, i - 1]).ToArray();
-                guesses.Add((0, 0, 0));
+                guesses.Add((v, h, 0));
                 foreach (var n in couldBe) {
                     Console.WriteLine($"Guessing {n} at ({v},{h}) - could be {string.Join(",", couldBe)}");
                     guesses[^1] = (v, h, n);
                     var f = new Futoshiki(this);
                     forbidden[v, h, n - 1] = false;
                     f.SetValue(v, h, n);
-                    didSomething |= f.Solve(guesses);
-                    if (f.IsSolved() && f.IsValid()) { // guess worked
+                    var (solved, fDidSomething) = f.Solve(guesses);
+                    didSomething |= fDidSomething;
+                    if (solved) { // guess worked
                         for (int i = 0; i < size; i++)
                             for (int j = 0; j < size; j++)
                                 for (int nn = 0; nn < size; nn++)
                                     forbidden[i, j, nn] = f.forbidden[i, j, nn];
                         Console.WriteLine("found solution");
-                        return didSomething;
+                        return (true, didSomething);
                     }
                     Console.WriteLine($"Guess failed {n} at ({v},{h})");
                 }
                 guesses.RemoveAt(guesses.Count - 1);
                 for (int n = 1; n <= size; n++)
                     forbidden[v, h, n - 1] = !couldBe.Contains(n);
-                return didSomething;
+                return (false, didSomething);
             }
         }
-        return true;
+        return (false, true);
     }
 
     private (int v, int h) NextUnknown() {
