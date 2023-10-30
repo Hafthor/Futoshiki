@@ -91,7 +91,7 @@ public class Futoshiki {
                 foreach ((int v, int h) in numberHints)
                     SetValue(v, h, grid[v, h]);
                 if (Solve()) break;
-                // Console.WriteLine("added hint");
+                Console.WriteLine("added hint");
                 hints++;
             }
             if (IsSolved()) {
@@ -175,83 +175,60 @@ public class Futoshiki {
     }
 
     public bool Solve() {
-        List<int[,]> solutions = new();
-        if (!Solve(solutions, true, 0) || solutions.Count > 1) {
+        List<(int, int, int)> guesses = new();
+        if (!Solve(guesses)) {
             forbidden = new bool[size, size, size];
             return false;
         }
-        forbidden = new bool[size, size, size];
-        guesses = 0;
-        solutions = new();
-        if (!Solve(solutions, false, 0)) {
-            forbidden = new bool[size, size, size];
-            return false;
+        if (IsSolved() && IsValid()) {
+            Console.WriteLine("Solved!");
+            // check to see if other solutions exist
+            foreach (var guess in guesses) {
+                var f = new Futoshiki(this);
+                f.forbidden[guess.Item1, guess.Item2, guess.Item3 - 1] = true;
+                if (f.Solve()) {
+                    Console.WriteLine("Other solution found");
+                    return false;
+                }
+            }
         }
         return IsSolved();
     }
 
-    private bool Solve(List<int[,]> solutions, bool uniqueTest, int depth) {
+    private bool Solve(List<(int, int, int)> guesses) {
         for (int pass = 0; pass < 100; pass++) {
             bool didSomething = false;
             for (int v = 0; v < size; v++)
                 for (int h = 0; h < size; h++)
-                    if (Solve(v, h, depth))
-                        didSomething = true;
+                    didSomething |= Solve(v, h);
             if (!didSomething) {
                 if (!IsValid()) break; // Invalid state
-                if (IsSolved()) {
-                    if (!uniqueTest) break;
-                    if (solutions.Count > 1) {
-                        // Console.WriteLine(new string(' ', depth * 2) + "multiple solutions found #2");
-                        return false; // multiple solutions found
-                    }
-                    var grid = new int[size, size];
-                    for (int i = 0; i < size; i++)
-                        for (int j = 0; j < size; j++)
-                            grid[i, j] = GetValue(i, j);
-                    solutions.Add(grid);
-                }
-            nextGuess: // try to guess a value
+                if (IsSolved()) return didSomething;
                 var (v, h) = NextUnknown();
                 if (v == -1) break; // No more guesses
-                guesses++;
                 var couldBe = Enumerable.Range(1, size).Where(i => !forbidden[v, h, i - 1]).ToArray();
-                var saveForbidden = new bool[size, size, size];
-                for (int i = 0; i < size; i++)
-                    for (int j = 0; j < size; j++)
-                        for (int k = 0; k < size; k++)
-                            saveForbidden[i, j, k] = forbidden[i, j, k];
+                guesses.Add((0, 0, 0));
                 foreach (var n in couldBe) {
-                    // restore forbidden
-                    for (int i = 0; i < size; i++)
-                        for (int j = 0; j < size; j++)
-                            for (int k = 0; k < size; k++)
-                                forbidden[i, j, k] = saveForbidden[i, j, k];
-                    // Console.WriteLine(new string(' ', depth * 2) + $"Guessing {n} at ({v},{h}) - could be {string.Join(",", couldBe)}");
+                    Console.WriteLine($"Guessing {n} at ({v},{h}) - could be {string.Join(",", couldBe)}");
+                    guesses[^1] = (v, h, n);
                     var f = new Futoshiki(this);
+                    forbidden[v, h, n - 1] = false;
                     f.SetValue(v, h, n);
-                    if (!f.Solve(solutions, uniqueTest, depth + 1)) return false;
+                    didSomething |= f.Solve(guesses);
                     if (f.IsSolved() && f.IsValid()) { // guess worked
-                        var grid = new int[size, size];
                         for (int i = 0; i < size; i++)
-                            for (int j = 0; j < size; j++) {
-                                grid[i, j] = GetValue(i, j);
-                                for (int k = 0; k < size; k++)
-                                    forbidden[i, j, k] = f.forbidden[i, j, k];
-                            }
-                        if (uniqueTest) {
-                            if (solutions.Count > 1) {
-                                // Console.WriteLine(new string(' ', depth * 2) + "multiple solutions found #2");
-                                return false; // multiple solutions found
-                            }
-                            solutions.Add(grid);
-                            forbidden[v, h, n - 1] = true;
-                            goto nextGuess;
-                        }
-                        break;
+                            for (int j = 0; j < size; j++)
+                                for (int nn = 0; nn < size; nn++)
+                                    forbidden[i, j, nn] = f.forbidden[i, j, nn];
+                        Console.WriteLine("found solution");
+                        return didSomething;
                     }
-                    // Console.WriteLine(new string(' ', depth * 2) + $"Guess failed {n} at ({v},{h})");
+                    Console.WriteLine($"Guess failed {n} at ({v},{h})");
                 }
+                guesses.RemoveAt(guesses.Count - 1);
+                for (int n = 1; n <= size; n++)
+                    forbidden[v, h, n - 1] = !couldBe.Contains(n);
+                return didSomething;
             }
         }
         return true;
@@ -265,7 +242,7 @@ public class Futoshiki {
         return (-1, -1);
     }
 
-    private bool Solve(int v, int h, int depth) {
+    private bool Solve(int v, int h) {
         bool didSomething = false;
 
         int n = GetValue(v, h);
@@ -274,13 +251,13 @@ public class Futoshiki {
             for (int i = 0; i < size; i++) {
                 if (i != h && !forbidden[v, i, n - 1]) {
                     didSomething = forbidden[v, i, n - 1] = true;
-                    // if (GetValue(v, i) != 0)
-                        // Console.WriteLine(new string(' ', depth * 2) + $"Discovered {GetValue(v, i)} at ({v},{i}) #1");
+                    if (GetValue(v, i) != 0)
+                        Console.WriteLine($"Discovered {GetValue(v, i)} at ({v},{i}) #1");
                 }
                 if (i != v && !forbidden[i, h, n - 1]) {
                     didSomething = forbidden[i, h, n - 1] = true;
-                    // if (GetValue(i, h) != 0)
-                        // Console.WriteLine(new string(' ', depth * 2) + $"Discovered {GetValue(i, h)} at ({i},{h}) #2");
+                    if (GetValue(i, h) != 0)
+                        Console.WriteLine($"Discovered {GetValue(i, h)} at ({i},{h}) #2");
                 }
             }
             return didSomething;
@@ -291,8 +268,8 @@ public class Futoshiki {
             for (int i = 0; i < constraints[v, h, c]; i++)
                 if (!forbidden[v, h, c % 2 != 0 ? size - 1 - i : i]) {
                     didSomething = forbidden[v, h, c % 2 != 0 ? size - 1 - i : i] = true;
-                    // if (GetValue(v, h) != 0)
-                        // Console.WriteLine(new string(' ', depth * 2) + $"Discovered {GetValue(v, h)} at ({v},{h}) #3");
+                    if (GetValue(v, h) != 0)
+                        Console.WriteLine($"Discovered {GetValue(v, h)} at ({v},{h}) #3");
                 }
 
         // only one in row or column that can be this value
@@ -302,7 +279,7 @@ public class Futoshiki {
                     Enumerable.Range(0, size).All(i => i == v || forbidden[i, h, nn - 1]))
                     if (SetValue(v, h, nn)) {
                         didSomething = true;
-                        // Console.WriteLine(new string(' ', depth * 2) + $"Discovered {nn} at ({v},{h}) #4");
+                        Console.WriteLine($"Discovered {nn} at ({v},{h}) #4");
                     }
 
         // do some more clever things here
